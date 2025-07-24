@@ -1,0 +1,46 @@
+RMD 
+
+session_descriptives.Rmd
+	> saves filtered session data
+	> generates session-level figures (4, 5, 6 in appendix)
+
+
+STATA
+
+session_clean_and_descriptives.do
+	> saves filtered session data for analysis (makes adjustments for stata and adds predicted covariates)
+	> generates descriptive session-level tables (grades and tutor copilot use)
+session_ITT_TOT_Logit_wRW.do
+	> generates ITT, TOT, and Logit regression tables for student session-level outcomes with multiple-hypothesis adjusted p-values
+session_heterogeneity_tutor.do
+	> generates tutor heterogeneity plots and regressions for session-level student outcomes 
+strategies_analysis_wRW.do
+	> generates log odds analysis of remediation strategies
+tutor_analysis.do
+	> generates attrition and balance tables, and survey regression tables
+student_exposure_analysis.do
+	> generates student-level regressions (effect of treatment percent on MAP)
+student_map-exitticket_22-23.do
+	> generates dataset and results for exit ticket - MAP exercise (appendix)
+
+revision_extensions
+	session_heterogeneity_studentgrade.do
+		> generates heterogeneity results by grade requested by reviewer
+	session_RandomEffects.do
+		> generates regression tables with alternative specification requested by reviewer for session-level results
+	strategies_RandomEffects.do
+		> generates figures and regression tables with alternative specification requested by reviewer for strategies results
+	strategies_heterogeneity_wRW.do
+		> generates figures and regression tables for tutor quality/experience heterogeneity requested by reviewer for strategies results
+
+
+PYTHON
+
+constants.py
+	> loads labels for strategy variables
+run_strategies_log_odds.py
+	> generates log odds figure as proposed in Monroe et al., 2008
+tutor_copilot_overlap_classifiers.ipynb
+	> generates strategy overlap table
+
+
