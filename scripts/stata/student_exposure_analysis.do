@@ -92,6 +92,7 @@ import delimited "$rawdata/sessions/tutor_copilot_session_level", varnames(1) cl
 // recoding
 gen treat = 1 if tutor_copilot_assignment == "TREATMENT"
 replace treat = 0 if tutor_copilot_assignment == "CONTROL"
+replace treat = . if tutor_is_floating_pool == 1 |  tutor_location=="FLT" 
 tab treat, m
 
 egen race = group(student_race_ethnicity)
@@ -99,6 +100,7 @@ replace race = 8 if student_race_ethnicity == ""
 
 
 collapse (count) exp_session_count = treat (sum) treat_count=treat, by(student_id)
+drop if exp_session_count==0 // exclude students who did not have at least one tutoring session with a randomized tutor
 
 joinby student_id using "$datafiles/student_achievement_2023-24.dta", unmatched(none)
 

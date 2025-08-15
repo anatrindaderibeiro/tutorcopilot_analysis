@@ -34,27 +34,31 @@ run "$root/scripts/stata/_global_paths.do"
 *-------------------------------------------------------------------------------
 **# Load
 *-------------------------------------------------------------------------------
-import delimited "$datafiles\messages\annotated_strategies.csv", bindquote(strict) clear
+import delimited "$datafiles\messages\annotated_huggingface\strategy_classified.csv", bindquote(strict) clear
 
 
-gen treat =  tutor_copilot_assignment=="TREATMENT"
-gen tutor_student = string(tutor_id) + "_" + string(student_id)
+joinby session_id using "$datafiles/filtered_copilot_data_foranalysis.dta", unmatched(both) _merge(_merge)
+tab _merge
+keep if _merge==3
+
+
 
 
 *Label
 
-label var strategies2 "Ask Question to Guide Thinking"
-label var strategies4 "Give Solution Strategy"
-label var strategies5 "Prompt Student to Explain"
-label var strategies6 "Encourage Student in Generic Way"
-label var strategies7 "Affirm Student's Correct Attempt"
-label var strategies8 "Give Away Answer/Explanation"
-label var strategies9 "Ask Student to Retry"
+label var strategy_askquestion_class "Ask Question to Guide Thinking" 		 
+label var strategy_solutionstrategy_class "Give Solution Strategy" 			 
+label var strategy_promptexplanation_class "Prompt Student to Explain"		 
+label var strategy_encouragestudent_class "Encourage Student in Generic Way"  
+label var strategy_affirmcorrect_class "Affirm Student's Correct Attempt"	 
+label var strategy_answerexplanation_class "Give Away Answer/Explanation" 	 
+label var strategy_promptretry_class "Ask Student to Retry" 				
+
+foreach i in "promptexplanation" "askquestion" "affirmcorrect" "promptretry" "answerexplanation" "solutionstrategy" "encouragestudent" {
+	rename strategy_`i'_class s_`i'
+}
 
 
-joinby session_id using "$datafiles/filtered_copilot_data_foranalysis.dta", unmatched(master) _merge(_merge)
-tab _merge
-drop _merge
 
 preserve
 keep tutor_id tutor_qa_score_pred tutor_age
@@ -65,37 +69,15 @@ sum tutor_age, d // median = 20
 restore
 
 
+xtile tutor_qa_score_pred_tercile = tutor_qa_score_pred, n(3)
+xtile tutor_age_tercile = tutor_age, n(3)
 
 *-------------------------------------------------------------------------------
 **# Tables
 *-------------------------------------------------------------------------------
 
-global strategies "strategies5 strategies2 strategies7 strategies9 strategies8 strategies4 strategies6"
+global strategies "s_promptexp s_askq s_affirmcorrect s_promptretry s_answerexp s_solutionstrat s_encouragestu"
 
-
-foreach group in "Below" "Above" {
-	if "`group'"== "Below" {
-		local sign  "<"
-		local title  "Below median `type' tutors"
-	}
-	if "`group'"=="Above" {
-		local sign = ">="
-		local title = "Above median `type' tutors"
-	}
-
-	foreach heterog in tutor_qa_score_pred tutor_age {
-		if "`heterog'" == "tutor_qa_score_pred" {
-			local restriction = "tutor_qa_score_pred `sign' 0.42"
-			local type = "quality rating"
-		}
-		if "`heterog'" == "tutor_age" {
-			local restriction = "tutor_age `sign' 20"
-			local type = "experience"
-		}	
-
-di `"`group'"'
-di "`sign'"
-di "`type'"
 
 estimates clear
 eststo clear
@@ -104,61 +86,114 @@ local multhyptest = ""
 local multhyptest_ind = " "
 
 
+foreach group in "Low" "Medium" "High" {
+
+	if "`group'"== "Low" {
+		local val = 1
+	}
+	if "`group'"== "Medium" {
+		local val = 2
+	}
+	if "`group'"== "High" {
+		local val = 3
+	}
+
+	foreach heterog in tutor_qa_score_pred tutor_age {
+		if "`heterog'" == "tutor_qa_score_pred" {
+			local type = "Quality Rating Score"
+			local shorttype = "qs"
+		}
+		if "`heterog'" == "tutor_age" {
+			local type = "Experience"
+			local shorttype = "exp"
+		}	
+		
+local title  "`group' `type' Tutors"
+
+
 ** logit with cluster
-local coefplot_list = ""
 
 foreach depvar in $strategies {
 	local c = `c'+1
 	if `c'>1 { 
 		local multhyptest_ind = "`multhyptest_ind', " 
 	}
-    eststo `depvar':  logit `depvar' treat if `restriction', cluster(tutor_student)
-	local a`c' = `depvar'
-	
+*table set up
+    eststo `depvar'_`shorttype'_`group':  logit `depvar' treat if `heterog'_tercile == `val', cluster(student_tutor)
 	estadd scalar oddsratio = exp(e(b)[1,1])
 	scalar zval = r(table)[3,1]
-	estadd local zval= "`:di %4.3f `=zval''" : `depvar'
-	
-	local coefcolor = cond( `=r(table)[4,1]'>0.05, "gray", cond(`=r(table)[1,1]'<0,  "blue", "red"))
-	local coefplot_list = "`coefplot_list' (`depvar', bcolor(`coefcolor'))"
+	estadd local zval= "`:di %4.3f `=zval''" : `depvar'_`shorttype'_`group'
+
 
 	local multhyptest = "`multhyptest'  (`="`e(cmdline)'"')"
 	local multhyptest_ind = "`multhyptest_ind'  treat "
-	}
+}
 	
+global table_list_`shorttype'_`group' = " `table_list_`shorttype'_`group'' "
 
-	
-global coefplot_list " `coefplot_list' "
+}
+}
+
+****************************************************************************************
 
 
 
 ** Romano-Wolf P-values
 di "`multhyptest'"
-rwolf2 `multhyptest', indepvars("`multhyptest_ind'") cluster(tutor_student) reps(100) usevalid
+rwolf2 `multhyptest', indepvars("`multhyptest_ind'") cluster(student_tutor) reps(100) usevalid
 mat rwolf = e(RW)
 mat list rwolf
-local rwrow = 0
 
-foreach depvar in $strategies {
-	local rwrow = `rwrow' +1 
-	estadd local rw_pval = "[`:di %4.3f rwolf[`rwrow',3]']"	: `depvar'
- di `=`rwrow''
-}
+local rwrow = 0
+local table_list_`shorttype'_`group' = ""
+
+
+foreach group in "Low" "Medium" "High" {
+	local title  "`group' `type' Tutors"
+
+	if "`group'"== "Low" {
+		local val = 1
+	}
+	if "`group'"== "Medium" {
+		local val = 2
+	}
+		if "`group'"== "High" {
+		local val = 3
+	}
+
+	foreach heterog in tutor_qa_score_pred tutor_age {
+		if "`heterog'" == "tutor_qa_score_pred" {
+			local type = "Quality Rating Score"
+			local shorttype = "qs"
+		}
+		if "`heterog'" == "tutor_age" {
+			local type = "Experience"
+			local shorttype = "exp"
+		}	
+
+
+	foreach depvar in $strategies {
+		local rwrow = `rwrow' +1 
+		cap estadd local rw_pval = "[`:di %4.3f rwolf[`rwrow',3]']"	: `depvar'_`shorttype'_`group'
+		di `=`rwrow''
+		
+		local table_list_`shorttype'_`group' = " `table_list_`shorttype'_`group'' `depvar'_`shorttype'_`group' "
+		}
+
 
 
 * Logit with cluster - Strategies
-esttab $strategies using "$output/regs_logitcluster_strategies_`type'_`group'.tex", ///
-se label b(a2) title("Title") mtitles("\shortstack{Prompt Student \\ to Explain}" "\shortstack{Ask Question to \\ Guide Thinking}"  "\shortstack{Affirm Student's \\ Correct Attempt}" "\shortstack{Ask Student \\ to Retry}" "\shortstack{Give Away \\ Answer/Explanation}" "\shortstack{Give Solution \\ Strategy}" "\shortstack{Encourage Student \\ in Generic Way}"  ) ///
+esttab `table_list_`shorttype'_`group'' using "$output/regs_logitcluster_strategies_`shorttype'_`group'.tex", ///
+se label b(a2) title("`title'") mtitles("\shortstack{Prompt Student \\ to Explain}" "\shortstack{Ask Question to \\ Guide Thinking}"  "\shortstack{Affirm Student's \\ Correct Attempt}" "\shortstack{Ask Student \\ to Retry}" "\shortstack{Give Away \\ Answer/Explanation}" "\shortstack{Give Solution \\ Strategy}" "\shortstack{Encourage Student \\ in Generic Way}"  ) ///
 star(+ 0.10 * 0.05 ** 0.01 *** 0.001) keep(treat) stats(rw_pval zval oddsratio N,  /// 
 label("Romano-Wolf p-val" "Z" "Odds Ratio" "N" ) fmt(%9.3f %9.3f %9.3f %12.0f)) nocons replace  addnotes("Notes: Student-tutor pair clustered standard errors are shown in parentheses. ") ///
 nonotes
 
-coefplot $coefplot_list , ///
-keep(treat) recast(bar)  barwidth(0.9) ///
- ciopts(recast(rcap)  lcolor(black)) citop ///
- asequation swapnames nokey grid(none)  ///
- xline(0) xlabel(-0.5 -0.4 -0.3 -0.2 -0.1 0 0.1 0.2 0.3 0.4 0.5)  text(0 -0.3 "Control") text(0 0.3 "Treatment") text(9.3 0 "`title' - Log odds ratio with 95% CI", size(12pt)) text(9.8 0 "Standard errors clustered by student-tutor pair", size(10pt)) graphregion(margin(b+2 t-1 r+3) ) aspectratio(0.5) ysize(4)  
-graph export "$output/strategies_logodds_clustered_`type'_`group'.png", replace
 
 }
 }
+
+
+
+
+

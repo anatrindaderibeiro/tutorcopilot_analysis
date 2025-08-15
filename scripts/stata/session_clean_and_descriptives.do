@@ -113,6 +113,32 @@ save "$datafiles/filtered_copilot_data_foranalysis.dta", replace
 tab grade, m
 
 
+* Student characteristics
+preserve
+keep student_id student_race_ethnicity student_is_female student_free_reduced_lunch student_special_education student_lep student_winter_map_2324 moy_map2324_pred
+duplicates drop
+count
+
+for varlist student_race_ethnicity student_is_female student_free_reduced_lunch student_special_education student_lep: tab X, m
+sum student_winter_map_2324 moy_map2324_pred
+codebook student_winter_map_2324 moy_map2324_pred
+restore
+
+
+* Tutor characteristics
+preserve
+keep tutor_id tutor_qa_score tutor_qa_score_pred tutor_age tutor_is_female
+duplicates drop
+count
+
+tab tutor_is_female, m
+sum tutor_qa_score tutor_qa_score_pred tutor_age
+
+codebook tutor_qa_score tutor_qa_score_pred tutor_age
+restore
+
+
+
 * Tutor characteristics as predictors for TC use 
 
 estimates clear

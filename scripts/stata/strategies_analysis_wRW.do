@@ -34,28 +34,37 @@ run "$root/scripts/stata/_global_paths.do"
 *-------------------------------------------------------------------------------
 **# Load
 *-------------------------------------------------------------------------------
-import delimited "$datafiles\messages\annotated_strategies.csv", bindquote(strict) clear
+import delimited "$datafiles\messages\annotated_huggingface\strategy_classified.csv", bindquote(strict) clear
 
 
-gen treat =  tutor_copilot_assignment=="TREATMENT"
-gen tutor_student = string(tutor_id) + "_" + string(student_id)
+joinby session_id using "$datafiles/filtered_copilot_data_foranalysis.dta", unmatched(both) _merge(_merge)
+tab _merge
+keep if _merge==3
+
+
 
 
 *Label
 
-label var strategies2 "Ask Question to Guide Thinking"
-label var strategies4 "Give Solution Strategy"
-label var strategies5 "Prompt Student to Explain"
-label var strategies6 "Encourage Student in Generic Way"
-label var strategies7 "Affirm Student's Correct Attempt"
-label var strategies8 "Give Away Answer/Explanation"
-label var strategies9 "Ask Student to Retry"
+label var strategy_askquestion_class "Ask Question to Guide Thinking" 		 
+label var strategy_solutionstrategy_class "Give Solution Strategy" 			 
+label var strategy_promptexplanation_class "Prompt Student to Explain"		 
+label var strategy_encouragestudent_class "Encourage Student in Generic Way"  
+label var strategy_affirmcorrect_class "Affirm Student's Correct Attempt"	 
+label var strategy_answerexplanation_class "Give Away Answer/Explanation" 	 
+label var strategy_promptretry_class "Ask Student to Retry" 				
+
+foreach i in "promptexplanation" "askquestion" "affirmcorrect" "promptretry" "answerexplanation" "solutionstrategy" "encouragestudent" {
+	rename strategy_`i'_class s_`i'
+}
+
+																	
 
 *-------------------------------------------------------------------------------
 **# Tables
 *-------------------------------------------------------------------------------
 
-global strategies "strategies5 strategies2 strategies7 strategies9 strategies8 strategies4 strategies6"
+global strategies "s_promptexplanation s_askquestion s_affirmcorrect s_promptretry s_answerexplanation s_solutionstrategy s_encouragestudent"
 
 estimates clear
 eststo clear
@@ -71,7 +80,7 @@ foreach depvar in $strategies {
 	if `c'>1 { 
 		local multhyptest_ind = "`multhyptest_ind', " 
 	}
-    eststo `depvar':  logit `depvar' treat, cluster(tutor_student)
+    eststo `depvar':  logit `depvar' treat, cluster(student_tutor)
 	local a`c' = `depvar'
 	
 	estadd scalar oddsratio = exp(e(b)[1,1])
@@ -90,7 +99,7 @@ global coefplot_list " `coefplot_list' "
 
 ** Romano-Wolf P-values
 di "`multhyptest'"
-rwolf2 `multhyptest', indepvars("`multhyptest_ind'") cluster(tutor_student) reps(100) usevalid
+rwolf2 `multhyptest', indepvars("`multhyptest_ind'") cluster(student_tutor) reps(100) usevalid
 mat rwolf = e(RW)
 mat list rwolf
 local rwrow = 0
@@ -113,7 +122,7 @@ coefplot $coefplot_list , ///
 keep(treat) recast(bar)  barwidth(0.9) ///
  ciopts(recast(rcap)  lcolor(black)) citop ///
  asequation swapnames nokey grid(none)  ///
- xline(0) xlabel(-0.5 -0.4 -0.3 -0.2 -0.1 0 0.1 0.2 0.3 0.4 0.5)  text(0 -0.3 "Control") text(0 0.3 "Treatment") text(9.3 0 "Log odds ratio with 95% CI", size(12pt)) text(9.8 0 "Standard errors clustered by student-tutor pair", size(10pt)) graphregion(margin(b+2 t-1 r+3) ) aspectratio(0.5) ysize(4)  
+ xline(0) xlabel( -0.2 -0.1 0 0.1 0.2 )  text(-0.25 -0.18 "Control") text(-0.25 0.17 "Treatment") text(9.3 0 "Log odds ratio with 95% CI", size(12pt)) text(9.8 0 "Standard errors clustered by student-tutor pair", size(10pt)) graphregion(margin(b+2 t-1 r+3) ) aspectratio(0.5) ysize(4)  
 graph export "$output/strategies_logodds_clustered.png", replace
 
 
